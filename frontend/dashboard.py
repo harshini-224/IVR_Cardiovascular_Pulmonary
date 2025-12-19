@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 from datetime import date
 
-BACKEND = "https://YOUR_BACKEND.onrender.com"
+BACKEND = "https://ivr-backend-te24.onrender.com"
 
 st.title("🫀 Cardio-Pulmonary Monitoring Dashboard")
 
