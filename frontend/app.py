@@ -1,7 +1,9 @@
 import streamlit as st
 import requests
+import os
 
-BACKEND = st.secrets["BACKEND_URL"]
+BACKEND = os.environ["BACKEND_URL"]
+
 
 st.title("Doctor Dashboard – Post Discharge Monitoring")
 
