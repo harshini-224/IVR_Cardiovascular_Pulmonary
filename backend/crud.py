@@ -1,7 +1,10 @@
 from sqlalchemy.orm import Session
-from models import Patient, IVRLog
+from models import Patient
 
 def create_patient(db: Session, data: dict):
+    existing = db.query(Patient).filter(Patient.phone == data["phone"]).first()
+    if existing:
+        return existing
     patient = Patient(**data)
     db.add(patient)
     db.commit()
@@ -11,11 +14,8 @@ def create_patient(db: Session, data: dict):
 def get_patients(db: Session):
     return db.query(Patient).filter(Patient.active == True).all()
 
-def get_patient(db: Session, pid: int):
-    return db.query(Patient).filter(Patient.id == pid).first()
-
 def delete_patient(db: Session, pid: int):
-    patient = get_patient(db, pid)
+    patient = db.query(Patient).filter(Patient.id == pid).first()
     if patient:
         patient.active = False
         db.commit()
