@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from datetime import datetime
 
 class PatientCreate(BaseModel):
     name: str
@@ -8,7 +8,8 @@ class PatientCreate(BaseModel):
 
 class PatientOut(PatientCreate):
     id: int
+    enrolled_on: datetime
     active: bool
 
     class Config:
-        orm_mode = True
+        from_attributes = True
