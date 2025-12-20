@@ -5,6 +5,8 @@ from models import Base
 import crud
 from twilio_calls import call_patient
 from scheduler import scheduler
+from schemas import PatientCreate, PatientOut
+from typing import List
 
 Base.metadata.create_all(bind=engine)
 
@@ -17,11 +19,12 @@ def get_db():
     finally:
         db.close()
 
-@app.post("/patients")
-def enroll_patient(data: dict, db: Session = Depends(get_db)):
-    return crud.create_patient(db, data)
 
-@app.get("/patients")
+@app.post("/patients", response_model=PatientOut)
+def enroll_patient(data: PatientCreate, db: Session = Depends(get_db)):
+    return crud.create_patient(db, data.dict())
+
+@app.get("/patients", response_model=List[PatientOut])
 def list_patients(db: Session = Depends(get_db)):
     return crud.get_patients(db)
 
