@@ -7,8 +7,9 @@ client = Client(
 )
 
 def call_patient(phone: str):
-    return client.calls.create(
+    call = client.calls.create(
         to=phone,
         from_=os.environ["TWILIO_NUMBER"],
         url=f"{os.environ['BACKEND_URL']}/twilio/voice"
-    ).sid
+    )
+    return call.sid
