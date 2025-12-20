@@ -7,6 +7,16 @@ BACKEND = os.environ["BACKEND_URL"]
 
 st.title("Doctor Dashboard – Post Discharge Monitoring")
 
+def fetch_patients():
+    try:
+        r = requests.get(f"{BACKEND}/patients", timeout=10)
+        r.raise_for_status()
+        return r.json()
+    except Exception as e:
+        st.error(f"Backend error: {e}")
+        return []
+
+
 st.header("Enroll Patient")
 name = st.text_input("Name")
 phone = st.text_input("Phone (+91...)")
@@ -21,7 +31,8 @@ if st.button("Enroll"):
     st.success("Patient enrolled")
 
 st.header("Active Patients")
-patients = requests.get(f"{BACKEND}/patients").json()
+patients = fetch_patients()
+
 
 for p in patients:
     st.write(p["name"], p["phone"], p["disease"])
