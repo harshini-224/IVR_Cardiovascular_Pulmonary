@@ -16,10 +16,6 @@ def get_patient(db: Session, pid: int):
 
 def delete_patient(db: Session, pid: int):
     patient = get_patient(db, pid)
-    patient.active = False
-    db.commit()
-
-def log_ivr(db: Session, data: dict):
-    log = IVRLog(**data)
-    db.add(log)
-    db.commit()
+    if patient:
+        patient.active = False
+        db.commit()
