@@ -1,70 +1,36 @@
-from fastapi import FastAPI, Form
+from fastapi import FastAPI, Depends
+from sqlalchemy.orm import Session
 from database import SessionLocal, engine
-from models import Base, Patient, IVRLog
-from datetime import date
-import json
+from models import Base
+import crud
+from twilio_calls import call_patient
+from scheduler import scheduler
 
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI()
+app = FastAPI(title="IVR Post Discharge Monitoring")
 
-# -------- PATIENT CRUD --------
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 @app.post("/patients")
-def add_patient(
-    name: str = Form(...),
-    phone: str = Form(...),
-    diagnosis: str = Form(...),
-    start_date: date = Form(...),
-    end_date: date = Form(...)
-):
-    db = SessionLocal()
-    p = Patient(
-        name=name,
-        phone=phone,
-        diagnosis=diagnosis,
-        start_date=start_date,
-        end_date=end_date
-    )
-    db.add(p)
-    db.commit()
-    return {"status": "added"}
+def enroll_patient(data: dict, db: Session = Depends(get_db)):
+    return crud.create_patient(db, data)
 
 @app.get("/patients")
-def list_patients():
-    db = SessionLocal()
-    return db.query(Patient).all()
+def list_patients(db: Session = Depends(get_db)):
+    return crud.get_patients(db)
 
 @app.delete("/patients/{pid}")
-def delete_patient(pid: int):
-    db = SessionLocal()
-    db.query(Patient).filter(Patient.id == pid).delete()
-    db.commit()
+def remove_patient(pid: int, db: Session = Depends(get_db)):
+    crud.delete_patient(db, pid)
     return {"status": "deleted"}
 
-# -------- IVR LOGS --------
-
-@app.post("/ivr/update")
-def save_ivr(
-    patient_id: int = Form(...),
-    transcript: str = Form(...),
-    symptoms: str = Form(...),
-    followups: str = Form(...),
-    risk: float = Form(...)
-):
-    db = SessionLocal()
-    log = IVRLog(
-        patient_id=patient_id,
-        transcript=transcript,
-        symptoms=symptoms,
-        followups=followups,
-        risk=risk
-    )
-    db.add(log)
-    db.commit()
-    return {"status": "saved"}
-
-@app.get("/ivr/{pid}")
-def ivr_logs(pid: int):
-    db = SessionLocal()
-    return db.query(IVRLog).filter(IVRLog.patient_id == pid).all()
+@app.post("/call/{phone}")
+def manual_call(phone: str):
+    sid = call_patient(phone)
+    return {"sid": sid}
