@@ -2,4 +2,8 @@ fastapi
 uvicorn
 sqlalchemy
 psycopg2-binary
-python-multipart
+python-dotenv
+requests
+twilio
+apscheduler
+
