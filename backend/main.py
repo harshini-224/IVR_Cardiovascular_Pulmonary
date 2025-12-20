@@ -19,14 +19,17 @@ def get_db():
     finally:
         db.close()
 
-# ---- CREATE TABLES USING INTERNAL DB ----
+# ---- DROP AND CREATE TABLES USING INTERNAL DB (TEMPORARY) ----
 @app.on_event("startup")
 def startup():
     retries = 5
     while retries:
         try:
+            # DROP all tables (WARNING: deletes all data)
+            Base.metadata.drop_all(bind=engine)
+            # CREATE tables
             Base.metadata.create_all(bind=engine)
-            print("✅ Database tables created")
+            print("✅ Database tables dropped and recreated")
             break
         except OperationalError:
             retries -= 1
