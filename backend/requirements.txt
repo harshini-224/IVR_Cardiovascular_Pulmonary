@@ -1,9 +1,11 @@
 fastapi
-uvicorn
+uvicorn[standard]
 sqlalchemy
 psycopg2-binary
 python-dotenv
 requests
 twilio
 apscheduler
-
+python-multipart
+pydantic
+pydantic-settings
