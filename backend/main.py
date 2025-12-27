@@ -9,7 +9,7 @@ from ml_engine import calculate_clinical_shap
 
 # Initialize database tables
 # NOTE: Only use drop_all if you intentionally want to wipe your data to fix schema errors
-# models.Base.metadata.drop_all(bind=engine) 
+models.Base.metadata.drop_all(bind=engine) 
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Patient Monitoring IVR System")
