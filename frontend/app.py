@@ -148,8 +148,8 @@ else:
     
     # 2. ADD SHAP EXPLAINABILITY HERE
                                 if log.get("shap"):
-                                    st.write("#### 🧠 AI Explanation (SHAP Value Contributions)")
-                                    st.info("Positive values (Red) increase risk, Negative values (Blue) decrease risk.")
+                                    st.write("#### 🧠 Clinical Explanation (SHAP)")
+                                    st.info("Based on AHA/WHO weighted protocols. Red increases risk, Blue decreases risk.")
         
         # Convert SHAP dictionary to a DataFrame for plotting
                                     shap_df = pd.DataFrame(
