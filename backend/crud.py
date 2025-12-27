@@ -51,6 +51,7 @@ def create_initial_log(db: Session, patient_id: int):
     new_log = IVRLog(
         patient_id=patient_id,
         symptoms={}, 
+        shap={},
         risk_score=0.0,
         created_at=datetime.utcnow()
     )
@@ -106,3 +107,5 @@ def finalize_risk_score(db: Session, patient_id: int, risk_score: float, shap_da
         # Crucial: tell SQLAlchemy to update the JSON field in the DB
         flag_modified(log, "shap")
         db.commit()
+        db.refresh(log)
+    return log
