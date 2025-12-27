@@ -76,18 +76,21 @@ def manual_call(phone: str, patient_id: int, db: Session = Depends(get_db)):
     return {"status": "Called", "sid": sid}
 
 # --- TWILIO IVR STATE MACHINE ---
+# --- TWILIO IVR STATE MACHINE ---
 
 @app.post("/twilio/voice")
 def ivr_start(patient_id: int = Query(...), db: Session = Depends(get_db)):
-    patient = crud.get_patient_by_id(db, patient_id)
+    # Direct DB lookup to ensure we find the record
+    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
     if not patient:
-        return Response(content="<Response><Say>Error.</Say></Response>", media_type="application/xml")
+        return Response(content='<Response><Say>Error: Patient record not found.</Say></Response>', media_type="application/xml")
     
-    twiml = f"""
+    # We use &amp; for XML escaping and method="POST" to avoid 405 errors
+    twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
     <Response>
         <Say voice="alice">Hello {patient.name}. This is a health check-in from your doctor.</Say>
         <Say voice="alice">Please listen. If your answer is Yes, press 1. If No, press 2.</Say>
-        <Redirect>/twilio/ask?pid={patient_id}&idx=0&dis={patient.disease}</Redirect>
+        <Redirect method="POST">/twilio/ask?pid={patient_id}&amp;idx=0&amp;dis={patient.disease}</Redirect>
     </Response>
     """
     return Response(content=twiml, media_type="application/xml")
@@ -97,15 +100,15 @@ def ivr_ask(pid: int = Query(...), idx: int = Query(...), dis: str = Query(...))
     survey = FRIENDLY_QUESTIONS.get(dis, []) + FRIENDLY_QUESTIONS.get("General", [])
     
     if idx >= len(survey):
-        return Response(content="<Response><Say voice='alice'>Thank you. Goodbye.</Say><Hangup/></Response>", media_type="application/xml")
+        return Response(content='<?xml version="1.0" encoding="UTF-8"?><Response><Say voice="alice">Thank you for completing your health check-in. Goodbye.</Say><Hangup/></Response>', media_type="application/xml")
 
     q = survey[idx]
-    twiml = f"""
+    twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
     <Response>
-        <Gather action="/twilio/handle?pid={pid}&idx={idx}&dis={dis}" numDigits="1" timeout="10">
+        <Gather action="/twilio/handle?pid={pid}&amp;idx={idx}&amp;dis={dis}" method="POST" numDigits="1" timeout="10">
             <Say voice="alice">{q['text']} Press 1 for Yes, 2 for No.</Say>
         </Gather>
-        <Redirect>/twilio/ask?pid={pid}&idx={idx}&dis={dis}</Redirect>
+        <Redirect method="POST">/twilio/ask?pid={pid}&amp;idx={idx}&amp;dis={dis}</Redirect>
     </Response>
     """
     return Response(content=twiml, media_type="application/xml")
@@ -113,15 +116,21 @@ def ivr_ask(pid: int = Query(...), idx: int = Query(...), dis: str = Query(...))
 @app.post("/twilio/handle")
 def ivr_handle(pid: int = Query(...), idx: int = Query(...), dis: str = Query(...), Digits: str = Form(None), db: Session = Depends(get_db)):
     survey = FRIENDLY_QUESTIONS.get(dis, []) + FRIENDLY_QUESTIONS.get("General", [])
-    if Digits not in ["1", "2"]:
+    
+    # Safety check for missing digits
+    if not Digits or Digits not in ["1", "2"]:
         return ivr_ask(pid, idx, dis)
 
     answer = "Yes" if Digits == "1" else "No"
     crud.update_ivr_answer(db, pid, survey[idx]["field"], answer)
 
+    # If this was the last question, calculate risk
     if idx == len(survey) - 1:
         log = crud.get_latest_log(db, pid)
-        yes_count = sum(1 for v in log.symptoms.values() if v == "Yes")
-        crud.finalize_risk_score(db, pid, yes_count / len(survey))
+        if log and log.symptoms:
+            yes_count = sum(1 for v in log.symptoms.values() if v == "Yes")
+            # Calculate score as a percentage
+            risk_pct = (yes_count / len(survey)) * 100
+            crud.finalize_risk_score(db, pid, risk_pct)
 
     return ivr_ask(pid, idx + 1, dis)
