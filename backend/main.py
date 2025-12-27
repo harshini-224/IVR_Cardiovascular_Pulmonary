@@ -137,3 +137,7 @@ if idx == len(survey) - 1:
             crud.finalize_risk_score(db, pid, risk_score)
 
     return ivr_ask(pid, idx + 1, dis)
+
+@app.get("/patients/{pid}/all-logs")
+def get_all_logs(pid: int, db: Session = Depends(get_db)):
+    return db.query(models.IVRLog).filter(models.IVRLog.patient_id == pid).order_by(models.IVRLog.id.asc()).all()
