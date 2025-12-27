@@ -159,7 +159,7 @@ else:
                                     
         # Create a horizontal bar chart
                                     st.bar_chart(data=shap_df, x="Feature", y="Contribution", color="#ff4b4b")
-                                    else:
+                                else:
                                     st.caption("SHAP explainability data not available for this log.")
                                 
                             
