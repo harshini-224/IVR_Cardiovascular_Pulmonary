@@ -76,7 +76,7 @@ for p in patients:
                 requests.post(f"{BACKEND}/call/{p['phone_number']}?patient_id={p['id']}")
                 st.toast("Call Triggered")
             
-            if st.button(f"🗑️ Discharge", key=f"del_{p['id']}"):
+            if st.button(f"🗑️ Delete", key=f"del_{p['id']}"):
                 requests.delete(f"{BACKEND}/patients/{p['id']}")
                 st.rerun()
 
