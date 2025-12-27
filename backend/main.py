@@ -125,12 +125,15 @@ def ivr_handle(pid: int = Query(...), idx: int = Query(...), dis: str = Query(..
     crud.update_ivr_answer(db, pid, survey[idx]["field"], answer)
 
     # If this was the last question, calculate risk
-    if idx == len(survey) - 1:
+if idx == len(survey) - 1:
         log = crud.get_latest_log(db, pid)
         if log and log.symptoms:
             yes_count = sum(1 for v in log.symptoms.values() if v == "Yes")
-            # Calculate score as a percentage
-            risk_pct = (yes_count / len(survey)) * 100
-            crud.finalize_risk_score(db, pid, risk_pct)
+            
+            # This calculation gives 50.0
+            risk_score = (yes_count / len(survey)) * 100
+            
+            # Save exactly 50.0 to the database
+            crud.finalize_risk_score(db, pid, risk_score)
 
     return ivr_ask(pid, idx + 1, dis)
