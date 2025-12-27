@@ -139,12 +139,33 @@ else:
                             else:
                                 c2.markdown(f"<span class='risk-low'>✅ STABLE</span>", unsafe_allow_html=True)
                             
+                            # ... (inside your log loop) ...
+
                             if c3.button("Show Responses", key=f"details_{log['id']}"):
+    # 1. Show the raw answers in a table
+                                st.write("#### Detailed Symptoms")
                                 st.table(pd.DataFrame(log['symptoms'].items(), columns=["Question", "Response"]))
+    
+    # 2. ADD SHAP EXPLAINABILITY HERE
+                                if log.get("shap"):
+                                    st.write("#### 🧠 AI Explanation (SHAP Value Contributions)")
+                                    st.info("Positive values (Red) increase risk, Negative values (Blue) decrease risk.")
+        
+        # Convert SHAP dictionary to a DataFrame for plotting
+                                    shap_df = pd.DataFrame(
+                                        log["shap"].items(), 
+                                        columns=["Feature", "Contribution"]
+                                    ).sort_values(by="Contribution", ascending=True)
+                                    
+        # Create a horizontal bar chart
+                                    st.bar_chart(data=shap_df, x="Feature", y="Contribution", color="#ff4b4b")
+                                    else:
+                                    st.caption("SHAP explainability data not available for this log.")
+                                
                             
-                            st.markdown("</div>", unsafe_allow_html=True)
-                else:
-                    st.error("Could not retrieve history.")
+                                st.markdown("</div>", unsafe_allow_html=True)
+                            else:
+                                st.error("Could not retrieve history.")
 
 st.divider()
 st.caption("AI-Powered Post-Discharge Monitoring System | Clinical Standard 2025")
