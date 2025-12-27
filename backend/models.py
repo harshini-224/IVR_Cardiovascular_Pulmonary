@@ -9,38 +9,27 @@ class Patient(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
     phone = Column(String, unique=True, index=True, nullable=False)
-    
-    # Stores 'Cardiovascular' or 'Pulmonary' to route IVR questions
     disease = Column(String, nullable=False) 
     enrolled_on = Column(DateTime, default=datetime.utcnow)
     active = Column(Boolean, default=True, index=True)
     
     # Clinical Review Fields
     doctor_override = Column(Boolean, default=False)
-    override_notes = Column(String, nullable=True)
+    override_notes = Column(String, nullable=True) # This is where your Assessment saves
 
-    # Relationship: One patient can have many IVR check-in logs
+    # Relationship to allow multiple logs (Day 1, Day 2, etc.)
     ivr_logs = relationship("IVRLog", back_populates="patient", cascade="all, delete-orphan")
 
 class IVRLog(Base):
     __tablename__ = "ivr_logs"
 
     id = Column(Integer, primary_key=True, index=True)
-    patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False)
+    patient_id = Column(Integer, ForeignKey("patients.id", ondelete="CASCADE"), nullable=False)
     
-    # Stores the raw speech-to-text if needed later
     transcript = Column(String, nullable=True) 
-    
-    # Stores the dictionary of "Friendly Questions" responses
-    # Example: {"shortness_of_breath": "Yes", "leg_swelling": "No"}
-    symptoms = Column(JSON) 
-    
-    # The calculated risk (e.g., 0.85 for 85% risk)
-    risk = Column(Float) 
-    
-    # Stores feature importance data for explainability (if using an ML model)
+    symptoms = Column(JSON, default={}) 
+    risk_score = Column(Float, default=0.0) # We use risk_score (0-100)
     shap = Column(JSON, nullable=True) 
-    
     created_at = Column(DateTime, default=datetime.utcnow)
 
     patient = relationship("Patient", back_populates="ivr_logs")
