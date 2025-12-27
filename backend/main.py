@@ -7,6 +7,8 @@ from database import SessionLocal, engine
 from twilio_calls import call_patient
 
 # Initialize database tables
+# NOTE: Only use drop_all if you intentionally want to wipe your data to fix schema errors
+# models.Base.metadata.drop_all(bind=engine) 
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Patient Monitoring IVR System")
@@ -39,7 +41,6 @@ FRIENDLY_QUESTIONS = {
     ]
 }
 
-# Dependency to get DB session
 def get_db():
     db = SessionLocal()
     try:
@@ -47,12 +48,7 @@ def get_db():
     finally:
         db.close()
 
-# --- DASHBOARD & PATIENT ENDPOINTS ---
-
-# Temporary: Add this to main.py
-models.Base.metadata.drop_all(bind=engine) # This deletes old tables
-models.Base.metadata.create_all(bind=engine) # This creates new ones
-
+# --- DASHBOARD ENDPOINTS ---
 
 @app.post("/patients", response_model=schemas.PatientOut)
 def enroll_patient(patient: schemas.PatientCreate, db: Session = Depends(get_db)):
@@ -64,27 +60,21 @@ def list_patients(db: Session = Depends(get_db)):
 
 @app.get("/patients/{pid}/all-logs", response_model=List[schemas.IVRLogOut])
 def get_all_logs(pid: int, db: Session = Depends(get_db)):
-    """Fetches full 30-day history for the dashboard."""
-    logs = crud.get_all_logs(db, pid)
-    if not logs:
-        return []
-    return logs
+    return crud.get_all_logs(db, pid)
 
 @app.put("/patients/{pid}/note")
 def update_note(pid: int, data: schemas.DoctorNoteUpdate, db: Session = Depends(get_db)):
-    """API endpoint to save doctor's notes (Assessment)."""
     updated_patient = crud.update_patient_note(db, pid, data.note)
     if not updated_patient:
         raise HTTPException(status_code=404, detail="Patient not found")
-    return {"status": "success", "message": "Assessment updated"}
+    return {"status": "success"}
 
 @app.delete("/patients/{pid}")
 def remove_patient(pid: int, db: Session = Depends(get_db)):
-    """API endpoint to delete a patient and their logs."""
     success = crud.delete_patient(db, pid)
     if not success:
         raise HTTPException(status_code=404, detail="Patient not found")
-    return {"status": "success", "message": "Patient deleted"}
+    return {"status": "success"}
 
 @app.post("/call/{phone}")
 def manual_call(phone: str, patient_id: int, db: Session = Depends(get_db)):
@@ -98,12 +88,13 @@ def manual_call(phone: str, patient_id: int, db: Session = Depends(get_db)):
 def ivr_start(patient_id: int = Query(...), db: Session = Depends(get_db)):
     patient = crud.get_patient_by_id(db, patient_id)
     if not patient:
-        return Response(content='<Response><Say voice="alice">Error: Patient not found.</Say></Response>', media_type="application/xml")
+        return Response(content='<Response><Say voice="alice">Patient not found.</Say></Response>', media_type="application/xml")
     
+    # IMPORTANT: XML requires &amp; instead of &
     twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
     <Response>
-        <Say voice="alice">Hello {patient.name}. This is a health check-in from your doctor.</Say>
-        <Say voice="alice">Please listen. If your answer is Yes, press 1. If No, press 2.</Say>
+        <Say voice="alice">Hello {patient.name}. This is a health check-in.</Say>
+        <Say voice="alice">For Yes, press 1. For No, press 2.</Say>
         <Redirect method="POST">/twilio/ask?pid={patient_id}&amp;idx=0&amp;dis={patient.disease}</Redirect>
     </Response>
     """
@@ -114,13 +105,14 @@ def ivr_ask(pid: int = Query(...), idx: int = Query(...), dis: str = Query(...))
     survey = FRIENDLY_QUESTIONS.get(dis, []) + FRIENDLY_QUESTIONS.get("General", [])
     
     if idx >= len(survey):
-        return Response(content='<?xml version="1.0" encoding="UTF-8"?><Response><Say voice="alice">Thank you for completing your health check-in. Goodbye.</Say><Hangup/></Response>', media_type="application/xml")
+        return Response(content='<?xml version="1.0" encoding="UTF-8"?><Response><Say voice="alice">Check-in complete. Goodbye.</Say><Hangup/></Response>', media_type="application/xml")
 
     q = survey[idx]
+    # Gather action must also use &amp;
     twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
     <Response>
         <Gather action="/twilio/handle?pid={pid}&amp;idx={idx}&amp;dis={dis}" method="POST" numDigits="1" timeout="10">
-            <Say voice="alice">{q['text']} Press 1 for Yes, 2 for No.</Say>
+            <Say voice="alice">{q['text']}</Say>
         </Gather>
         <Redirect method="POST">/twilio/ask?pid={pid}&amp;idx={idx}&amp;dis={dis}</Redirect>
     </Response>
@@ -131,19 +123,27 @@ def ivr_ask(pid: int = Query(...), idx: int = Query(...), dis: str = Query(...))
 def ivr_handle(pid: int = Query(...), idx: int = Query(...), dis: str = Query(...), Digits: str = Form(None), db: Session = Depends(get_db)):
     survey = FRIENDLY_QUESTIONS.get(dis, []) + FRIENDLY_QUESTIONS.get("General", [])
     
+    # If no input, ask the same question again
     if not Digits or Digits not in ["1", "2"]:
         return ivr_ask(pid, idx, dis)
 
     answer = "Yes" if Digits == "1" else "No"
-    crud.update_ivr_answer(db, pid, survey[idx]["field"], answer)
+    
+    try:
+        # Save current answer
+        crud.update_ivr_answer(db, pid, survey[idx]["field"], answer)
 
-    # Calculate risk if this is the final question
-    if idx == len(survey) - 1:
-        log = crud.get_latest_log(db, pid)
-        if log and log.symptoms:
-            yes_count = sum(1 for v in log.symptoms.values() if v == "Yes")
-            # Clear 0-100 score logic
-            risk_score = (yes_count / len(survey)) * 100
-            crud.finalize_risk_score(db, pid, risk_score)
-
-    return ivr_ask(pid, idx + 1, dis)
+        # If it's the last question, calculate total risk
+        if idx == len(survey) - 1:
+            log = crud.get_latest_log(db, pid)
+            if log and log.symptoms:
+                yes_count = sum(1 for v in log.symptoms.values() if v == "Yes")
+                risk_score = (yes_count / len(survey)) * 100
+                crud.finalize_risk_score(db, pid, risk_score)
+        
+        # Move to next question
+        return ivr_ask(pid, idx + 1, dis)
+        
+    except Exception as e:
+        print(f"Error in handle: {e}")
+        return Response(content='<?xml version="1.0" encoding="UTF-8"?><Response><Say voice="alice">A technical error occurred. Goodbye.</Say><Hangup/></Response>', media_type="application/xml")
