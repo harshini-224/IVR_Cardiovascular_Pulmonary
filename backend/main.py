@@ -5,7 +5,7 @@ from typing import List
 import crud, models, schemas
 from database import SessionLocal, engine
 from twilio_calls import call_patient
-from ml_engine import calculate_clinical_shap
+from ml_engine import calculate_risk_and_shap
 
 # Initialize database tables
 # NOTE: Only use drop_all if you intentionally want to wipe your data to fix schema errors
