@@ -139,7 +139,7 @@ def ivr_handle(pid: int = Query(...), idx: int = Query(...), dis: str = Query(..
         if idx == len(survey) - 1:
             log = crud.get_latest_log(db, pid)
             if log and log.symptoms:
-                risk_score, shap_data = calculate_clinical_shap(log.symptoms)
+                risk_score, shap_data = calculate_clinical_shap(dis, log.symptoms)
                 crud.finalize_risk_score(db, pid, risk_score, shap_data)
         
         # Move to next question
