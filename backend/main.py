@@ -57,17 +57,29 @@ def enroll_patient(patient: schemas.PatientCreate, db: Session = Depends(get_db)
 def list_patients(db: Session = Depends(get_db)):
     return crud.get_patients(db)
 
-@app.get("/patients/{pid}/latest-log", response_model=schemas.IVRLogOut)
-def get_latest_log(pid: int, db: Session = Depends(get_db)):
-    log = crud.get_latest_log(db, pid)
-    if not log:
-        raise HTTPException(status_code=404, detail="No logs found")
-    return log
+@app.get("/patients/{pid}/all-logs", response_model=List[schemas.IVRLogOut])
+def get_all_logs(pid: int, db: Session = Depends(get_db)):
+    """Fetches full 30-day history for the dashboard."""
+    logs = crud.get_all_logs(db, pid)
+    if not logs:
+        return []
+    return logs
 
 @app.put("/patients/{pid}/note")
 def update_note(pid: int, data: schemas.DoctorNoteUpdate, db: Session = Depends(get_db)):
-    crud.update_patient_note(db, pid, data.note)
-    return {"message": "Note updated"}
+    """API endpoint to save doctor's notes (Assessment)."""
+    updated_patient = crud.update_patient_note(db, pid, data.note)
+    if not updated_patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    return {"status": "success", "message": "Assessment updated"}
+
+@app.delete("/patients/{pid}")
+def remove_patient(pid: int, db: Session = Depends(get_db)):
+    """API endpoint to delete a patient and their logs."""
+    success = crud.delete_patient(db, pid)
+    if not success:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    return {"status": "success", "message": "Patient deleted"}
 
 @app.post("/call/{phone}")
 def manual_call(phone: str, patient_id: int, db: Session = Depends(get_db)):
@@ -76,16 +88,13 @@ def manual_call(phone: str, patient_id: int, db: Session = Depends(get_db)):
     return {"status": "Called", "sid": sid}
 
 # --- TWILIO IVR STATE MACHINE ---
-# --- TWILIO IVR STATE MACHINE ---
 
 @app.post("/twilio/voice")
 def ivr_start(patient_id: int = Query(...), db: Session = Depends(get_db)):
-    # Direct DB lookup to ensure we find the record
-    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
+    patient = crud.get_patient_by_id(db, patient_id)
     if not patient:
-        return Response(content='<Response><Say>Error: Patient record not found.</Say></Response>', media_type="application/xml")
+        return Response(content='<Response><Say voice="alice">Error: Patient not found.</Say></Response>', media_type="application/xml")
     
-    # We use &amp; for XML escaping and method="POST" to avoid 405 errors
     twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
     <Response>
         <Say voice="alice">Hello {patient.name}. This is a health check-in from your doctor.</Say>
@@ -117,43 +126,19 @@ def ivr_ask(pid: int = Query(...), idx: int = Query(...), dis: str = Query(...))
 def ivr_handle(pid: int = Query(...), idx: int = Query(...), dis: str = Query(...), Digits: str = Form(None), db: Session = Depends(get_db)):
     survey = FRIENDLY_QUESTIONS.get(dis, []) + FRIENDLY_QUESTIONS.get("General", [])
     
-    # Safety check for missing digits
     if not Digits or Digits not in ["1", "2"]:
         return ivr_ask(pid, idx, dis)
 
     answer = "Yes" if Digits == "1" else "No"
     crud.update_ivr_answer(db, pid, survey[idx]["field"], answer)
 
-    # If this was the last question, calculate risk
-if idx == len(survey) - 1:
+    # Calculate risk if this is the final question
+    if idx == len(survey) - 1:
         log = crud.get_latest_log(db, pid)
         if log and log.symptoms:
             yes_count = sum(1 for v in log.symptoms.values() if v == "Yes")
-            
-            # This calculation gives 50.0
+            # Clear 0-100 score logic
             risk_score = (yes_count / len(survey)) * 100
-            
-            # Save exactly 50.0 to the database
             crud.finalize_risk_score(db, pid, risk_score)
 
     return ivr_ask(pid, idx + 1, dis)
-
-@app.get("/patients/{pid}/all-logs")
-def get_all_logs(pid: int, db: Session = Depends(get_db)):
-    return db.query(models.IVRLog).filter(models.IVRLog.patient_id == pid).order_by(models.IVRLog.id.asc()).all()
-
-@app.put("/patients/{pid}/note")
-def update_note(pid: int, data: schemas.DoctorNoteUpdate, db: Session = Depends(get_db)):
-    """API endpoint to save doctor's notes."""
-    updated_patient = crud.update_patient_assessment(db, pid, data.note)
-    if not updated_patient:
-        raise HTTPException(status_code=404, detail="Patient not found")
-    return {"status": "success", "message": "Assessment updated"}
-
-@app.delete("/patients/{pid}")
-def remove_patient(pid: int, db: Session = Depends(get_db)):
-    """API endpoint to delete a patient."""
-    success = crud.delete_patient(db, pid)
-    if not success:
-        raise HTTPException(status_code=404, detail="Patient not found")
-    return {"status": "success", "message": "Patient deleted"}
