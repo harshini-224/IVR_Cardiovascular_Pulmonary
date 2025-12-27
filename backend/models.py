@@ -22,14 +22,15 @@ class Patient(Base):
 
 class IVRLog(Base):
     __tablename__ = "ivr_logs"
-
     id = Column(Integer, primary_key=True, index=True)
-    patient_id = Column(Integer, ForeignKey("patients.id", ondelete="CASCADE"), nullable=False)
+    patient_id = Column(Integer, ForeignKey("patients.id"))
+    symptoms = Column(JSON)
+    shap = Column(JSON)
+    risk_score = Column(Float)
     
-    transcript = Column(String, nullable=True) 
-    symptoms = Column(JSON, default={}) 
-    risk_score = Column(Float, default=0.0) # We use risk_score (0-100)
-    shap = Column(JSON, nullable=True) 
+    # ADD THESE THREE LINES:
+    doctor_status = Column(String, default="Pending")
+    doctor_notes = Column(String, nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    
     created_at = Column(DateTime, default=datetime.utcnow)
-
-    patient = relationship("Patient", back_populates="ivr_logs")
