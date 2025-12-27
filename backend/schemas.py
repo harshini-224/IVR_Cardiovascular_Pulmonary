@@ -8,16 +8,25 @@ class IVRLogBase(BaseModel):
     patient_id: int
     # Dict[str, str] handles the "Yes/No" answers stored in JSON
     symptoms: Optional[Dict[str, str]] = {} 
-    risk_score: Optional[float] = 0.0 # Renamed to match model
-    transcript: Optional[str] = None
-    shap: Optional[Dict[str, Any]] = None
-
+    shap: Optional[Dict[str, float]] = {}
+    risk_score: Optional[float] = 0.0
+    
+    # Doctor's Assessment Fields
+    doctor_status: str = "Pending"
+    doctor_notes: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
+    
 class IVRLogCreate(IVRLogBase):
     pass
 
 class IVRLogResponse(IVRLogBase):
     id: int
     created_at: datetime
+
+class IVRLogUpdate(BaseModel):
+    """Schema for updating the doctor's assessment only."""
+    doctor_status: str
+    doctor_notes: str
 
 class IVRLogOut(IVRLogBase):
     id: int
@@ -30,8 +39,8 @@ class IVRLogOut(IVRLogBase):
 
 class PatientBase(BaseModel):
     name: str
-    phone: str
-    disease: str
+    phone_number: str
+    disease_track: str
 
 class PatientCreate(PatientBase):
     pass
@@ -43,7 +52,7 @@ class PatientOut(PatientBase):
     doctor_override: bool
     override_notes: Optional[str] = None
     # Included to allow the dashboard to see all check-ins for Day 1, Day 2, etc.
-    ivr_logs: List[IVRLogOut] = [] 
+    logs: List[IVRLogOut] = [] 
 
     class Config:
         from_attributes = True
