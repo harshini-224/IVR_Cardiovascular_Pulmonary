@@ -8,8 +8,8 @@ class Patient(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
-    phone = Column(String, unique=True, index=True, nullable=False)
-    disease = Column(String, nullable=False) 
+    phone_number = Column(String, unique=True, index=True, nullable=False)
+    disease_track = Column(String, nullable=False) 
     enrolled_on = Column(DateTime, default=datetime.utcnow)
     active = Column(Boolean, default=True, index=True)
     
