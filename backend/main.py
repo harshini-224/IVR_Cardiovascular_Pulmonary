@@ -141,3 +141,19 @@ if idx == len(survey) - 1:
 @app.get("/patients/{pid}/all-logs")
 def get_all_logs(pid: int, db: Session = Depends(get_db)):
     return db.query(models.IVRLog).filter(models.IVRLog.patient_id == pid).order_by(models.IVRLog.id.asc()).all()
+
+@app.put("/patients/{pid}/note")
+def update_note(pid: int, data: schemas.DoctorNoteUpdate, db: Session = Depends(get_db)):
+    """API endpoint to save doctor's notes."""
+    updated_patient = crud.update_patient_assessment(db, pid, data.note)
+    if not updated_patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    return {"status": "success", "message": "Assessment updated"}
+
+@app.delete("/patients/{pid}")
+def remove_patient(pid: int, db: Session = Depends(get_db)):
+    """API endpoint to delete a patient."""
+    success = crud.delete_patient(db, pid)
+    if not success:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    return {"status": "success", "message": "Patient deleted"}
