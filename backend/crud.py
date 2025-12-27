@@ -15,6 +15,11 @@ def create_patient(db: Session, data: dict):
     db.refresh(patient) #
     return patient #
 
+# Add this to crud.py
+def get_patient_by_id(db: Session, pid: int):
+    """Helper to find a patient by their primary key."""
+    return db.query(models.Patient).filter(models.Patient.id == pid).first()
+
 def get_patients(db: Session):
     """Returns all active patients for the dashboard."""
     return db.query(Patient).filter(Patient.active == True).all() #
