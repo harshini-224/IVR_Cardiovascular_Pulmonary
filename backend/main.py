@@ -5,6 +5,7 @@ from typing import List
 import crud, models, schemas
 from database import SessionLocal, engine
 from twilio_calls import call_patient
+from ml_engine import calculate_clinical_shap
 
 # Initialize database tables
 # NOTE: Only use drop_all if you intentionally want to wipe your data to fix schema errors
@@ -120,15 +121,16 @@ def ivr_ask(pid: int = Query(...), idx: int = Query(...), dis: str = Query(...))
     return Response(content=twiml, media_type="application/xml")
 
 @app.post("/twilio/handle")
-def ivr_handle(pid: int = Query(...), idx: int = Query(...), dis: str = Query(...), Digits: str = Form(None), db: Session = Depends(get_db)):
+def ivr_handle(pid: int = Query(...), idx: int = Query(...), dis: str = Query(...), 
+               Digits: str = Form(None), db: Session = Depends(get_db)):
+    
     survey = FRIENDLY_QUESTIONS.get(dis, []) + FRIENDLY_QUESTIONS.get("General", [])
     
-    # If no input, ask the same question again
     if not Digits or Digits not in ["1", "2"]:
         return ivr_ask(pid, idx, dis)
 
+    # Save the answer
     answer = "Yes" if Digits == "1" else "No"
-    
     try:
         # Save current answer
         crud.update_ivr_answer(db, pid, survey[idx]["field"], answer)
@@ -137,9 +139,8 @@ def ivr_handle(pid: int = Query(...), idx: int = Query(...), dis: str = Query(..
         if idx == len(survey) - 1:
             log = crud.get_latest_log(db, pid)
             if log and log.symptoms:
-                yes_count = sum(1 for v in log.symptoms.values() if v == "Yes")
-                risk_score = (yes_count / len(survey)) * 100
-                crud.finalize_risk_score(db, pid, risk_score)
+                risk_score, shap_data = calculate_clinical_shap(log.symptoms)
+                crud.finalize_risk_score(db, pid, risk_score, shap_data)
         
         # Move to next question
         return ivr_ask(pid, idx + 1, dis)
