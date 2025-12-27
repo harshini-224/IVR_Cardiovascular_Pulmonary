@@ -93,11 +93,16 @@ def get_all_logs(db: Session, patient_id: int):
         IVRLog.patient_id == patient_id
     ).order_by(IVRLog.created_at.asc()).all()
 
-def finalize_risk_score(db: Session, patient_id: int, risk_score: float):
-    """Saves the final calculated risk percentage (0 to 100)."""
+def finalize_risk_score(db: Session, patient_id: int, risk_score: float, shap_data: dict):
+    # Fetch the current log being filled
     log = db.query(IVRLog).filter(
         IVRLog.patient_id == patient_id
     ).order_by(IVRLog.created_at.desc()).first()
+    
     if log:
         log.risk_score = risk_score
+        log.shap = shap_data  # This stores the weights for the bar chart
+        
+        # Crucial: tell SQLAlchemy to update the JSON field in the DB
+        flag_modified(log, "shap")
         db.commit()
