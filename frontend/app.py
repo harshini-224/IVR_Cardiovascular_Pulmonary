@@ -93,16 +93,26 @@ else:
                 
                 # Clinical Assessment (Saves to override_notes)
                 st.markdown("### Clinical Assessment")
-                current_note = p.get("override_notes", "")
-                note_input = st.text_area("Observations:", value=current_note if current_note else "", key=f"note_{p['id']}")
                 
-                if st.button("Save Assessment", key=f"btn_note_{p['id']}"):
-                    requests.put(f"{BACKEND}/patients/{p['id']}/note", json={"note": note_input})
-                    st.success("Assessment saved to database.")
 
             with col2:
                 st.markdown("### 30-Day History")
-                
+                # Use .get() to avoid KeyErrors if the field is null
+                current_note = p.get("override_notes", "") 
+    
+    # Display the existing note so the doctor can see it
+                if current_note:
+                    st.info(f"**Current Note:** {current_note}")
+                else:
+                    st.write("*No assessment recorded yet.*")
+
+                note_input = st.text_area("New Observations:", value=current_note, key=f"note_{p['id']}")
+    
+                if st.button("Save Assessment", key=f"btn_note_{p['id']}"):
+                    res = requests.put(f"{BACKEND}/patients/{p['id']}/note", json={"note": note_input})
+                    if res.status_code == 200:
+                        st.success("Assessment saved!")
+                        st.rerun() # Refresh the UI to show the new note
                 # Fetch all logs for this specific patient
                 log_res = requests.get(f"{BACKEND}/patients/{p['id']}/all-logs")
                 
