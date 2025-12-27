@@ -15,6 +15,10 @@ class IVRLogBase(BaseModel):
 class IVRLogCreate(IVRLogBase):
     pass
 
+class IVRLogResponse(IVRLogBase):
+    id: int
+    created_at: datetime
+
 class IVRLogOut(IVRLogBase):
     id: int
     created_at: datetime
