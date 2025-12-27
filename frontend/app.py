@@ -2,12 +2,24 @@ import streamlit as st
 import requests
 import os
 import pandas as pd
-from datetime import datetime
+import matplotlib.pyplot as plt
 
 # Backend URL configuration
 BACKEND = os.environ.get("BACKEND_URL", "http://localhost:8000")
 
 st.set_page_config(page_title="Doctor Monitoring Dashboard", layout="wide", page_icon="🏥")
+
+# --- CLINICAL REFERENCE MAP (The "What" and "Source") ---
+CLINICAL_REF = {
+    "chest_discomfort": {"name": "Acute Chest Discomfort", "src": "AHA ACS Guidelines"},
+    "leg_swelling": {"name": "Peripheral Edema", "src": "AHA Heart Failure Protocol"},
+    "confusion": {"name": "Altered Mental Status", "src": "WHO qSOFA (Sepsis)"},
+    "shortness_of_breath": {"name": "Dyspnea", "src": "AHA/WHO Standards"},
+    "weight_gain": {"name": "Rapid Fluid Retention", "src": "AHA HF Red Flags"},
+    "fever_chills": {"name": "Febrile Response", "src": "WHO Infection Protocol"},
+    "rest_dyspnea": {"name": "Resting Respiratory Distress", "src": "WHO Critical Care"},
+    "wheezing": {"name": "Bronchospasm", "src": "ATS Pulmonary Standards"}
+}
 
 # --- CUSTOM UI STYLING ---
 st.markdown("""
@@ -16,14 +28,13 @@ st.markdown("""
     .risk-med { color: #ffa500; font-size: 18px; font-weight: bold; }
     .risk-low { color: #008000; font-size: 18px; font-weight: bold; }
     .day-card { 
-        border: 1px solid #e6e9ef; 
-        padding: 15px; 
-        border-radius: 10px; 
-        background-color: #ffffff; 
-        margin-bottom: 10px;
-        box-shadow: 2px 2px 5px rgba(0,0,0,0.05);
+        border: 1px solid #e6e9ef; padding: 20px; border-radius: 10px; 
+        background-color: #f9f9f9; margin-bottom: 15px;
     }
-    .stExpander { border: 1px solid #d1d5db !important; }
+    .explanation-box {
+        background-color: #fff3f3; border-left: 5px solid #ff4b4b;
+        padding: 10px; margin-top: 10px; border-radius: 5px;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -32,140 +43,92 @@ st.title("🏥 Patient Monitoring & Risk Dashboard")
 # --- SIDEBAR: ENROLLMENT ---
 with st.sidebar:
     st.header("📋 Patient Enrollment")
-    st.info("Register a patient to begin their 30-day automated monitoring track.")
-    
     with st.form("enrollment_form", clear_on_submit=True):
         name = st.text_input("Full Name")
-        phone = st.text_input("Phone Number (+...)")
-        disease = st.selectbox("Disease Track", ["Cardiovascular", "Pulmonary"])
+        phone = st.text_input("Phone Number")
+        # Updated to match disease_track in backend
+        track = st.selectbox("Disease Track", ["Cardiovascular", "Pulmonary"])
         
         if st.form_submit_button("Enroll Patient"):
-            if name and phone:
-                try:
-                    payload = {"name": name, "phone": phone, "disease": disease}
-                    res = requests.post(f"{BACKEND}/patients", json=payload)
-                    if res.status_code == 200:
-                        st.success(f"Successfully enrolled {name}")
-                        st.rerun()
-                    else:
-                        st.error(f"Error: {res.text}")
-                except Exception as e:
-                    st.error(f"Connection failed: {e}")
-            else:
-                st.warning("Please fill in all fields.")
+            payload = {"name": name, "phone_number": phone, "disease_track": track}
+            res = requests.post(f"{BACKEND}/patients", json=payload)
+            if res.status_code == 200:
+                st.success(f"Enrolled {name}")
+                st.rerun()
 
-# --- MAIN SECTION: MONITORING ---
-
-def get_patients():
+# --- MAIN MONITORING SECTION ---
+def fetch_patients():
     try:
         r = requests.get(f"{BACKEND}/patients")
         return r.json() if r.status_code == 200 else []
-    except:
-        return []
+    except: return []
 
-patients = get_patients()
+patients = fetch_patients()
 
-if not patients:
-    st.info("No active patients. Use the sidebar to enroll a new patient.")
-else:
-    st.subheader(f"Monitoring {len(patients)} Active Cases")
-    
-    for p in patients:
-        # Create an expander with colored status based on most recent log if exists
-        with st.expander(f"👤 {p['name']} | Track: {p['disease']} | Phone: {p['phone']}"):
-            col1, col2 = st.columns([1, 2])
-            
-            with col1:
-                st.markdown("### Patient Actions")
-                
-                # Manual Call Trigger
-                if st.button(f"📞 Trigger Call Now", key=f"call_{p['id']}"):
-                    requests.post(f"{BACKEND}/call/{p['phone']}?patient_id={p['id']}")
-                    st.toast(f"Outbound call sent to {p['name']}")
-                
-                # Delete/Discharge Patient
-                if st.button(f"🗑️ Discharge Patient", key=f"del_{p['id']}"):
-                    requests.delete(f"{BACKEND}/patients/{p['id']}")
-                    st.success("Patient Discharged.")
-                    st.rerun()
-                
-                st.divider()
-                
-                # Clinical Assessment (Saves to override_notes)
-                st.markdown("### Clinical Assessment")
-                
-
-            with col2:
-                st.markdown("### 30-Day History")
-                # Use .get() to avoid KeyErrors if the field is null
-                current_note = p.get("override_notes", "") 
-    
-    # Display the existing note so the doctor can see it
-                if current_note:
-                    st.info(f"**Current Note:** {current_note}")
-                else:
-                    st.write("*No assessment recorded yet.*")
-
-                note_input = st.text_area("New Observations:", value=current_note, key=f"note_{p['id']}")
-    
-                if st.button("Save Assessment", key=f"btn_note_{p['id']}"):
-                    res = requests.put(f"{BACKEND}/patients/{p['id']}/note", json={"note": note_input})
-                    if res.status_code == 200:
-                        st.success("Assessment saved!")
-                        st.rerun() # Refresh the UI to show the new note
-                # Fetch all logs for this specific patient
-                log_res = requests.get(f"{BACKEND}/patients/{p['id']}/all-logs")
-                
-                if log_res.status_code == 200:
-                    logs = log_res.json() # Returns a list ordered by date
-                    
-                    if not logs:
-                        st.info("No check-in logs found yet. The first automated call will occur within 24 hours.")
-                    else:
-                        # Displaying logs from Newest to Oldest
-                        for idx, log in enumerate(reversed(logs)):
-                            day_num = len(logs) - idx
-                            score = int(log.get("risk_score", 0))
-                            
-                            st.markdown(f"<div class='day-card'>", unsafe_allow_html=True)
-                            c1, c2, c3 = st.columns([1, 2, 2])
-                            
-                            c1.metric(f"Day {day_num}", f"{score}%")
-                            
-                            if score > 60:
-                                c2.markdown(f"<span class='risk-high'>🚨 HIGH RISK</span>", unsafe_allow_html=True)
-                            elif score > 30:
-                                c2.markdown(f"<span class='risk-med'>⚠️ MODERATE</span>", unsafe_allow_html=True)
-                            else:
-                                c2.markdown(f"<span class='risk-low'>✅ STABLE</span>", unsafe_allow_html=True)
-                            
-                            # ... (inside your log loop) ...
-
-                            if c3.button("Show Responses", key=f"details_{log['id']}"):
-    # 1. Show the raw answers in a table
-                                st.write("#### Detailed Symptoms")
-                                st.table(pd.DataFrame(log['symptoms'].items(), columns=["Question", "Response"]))
-    
-    # 2. ADD SHAP EXPLAINABILITY HERE
-                                if log.get("shap"):
-                                    st.write("#### 🧠 Clinical Explanation (SHAP)")
-                                    st.info("Based on AHA/WHO weighted protocols. Red increases risk, Blue decreases risk.")
+for p in patients:
+    # Patient Expander Header
+    with st.expander(f"👤 {p['name']} | Track: {p['disease_track']} | Status: {'Active' if p['active'] else 'Inactive'}"):
+        col_actions, col_history = st.columns([1, 2])
         
-        # Convert SHAP dictionary to a DataFrame for plotting
-                                    shap_df = pd.DataFrame(
-                                        log["shap"].items(), 
-                                        columns=["Feature", "Contribution"]
-                                    ).sort_values(by="Contribution", ascending=True)
-                                    
-        # Create a horizontal bar chart
-                                    st.bar_chart(data=shap_df, x="Feature", y="Contribution", color="#ff4b4b")
-                                else:
-                                    st.caption("SHAP explainability data not available for this log.")
-                                
-                            
-                                st.markdown("</div>", unsafe_allow_html=True)
-                            else:
-                                st.error("Could not retrieve history.")
+        with col_actions:
+            st.markdown("### Actions")
+            if st.button(f"📞 Trigger Call", key=f"call_{p['id']}"):
+                requests.post(f"{BACKEND}/call/{p['phone_number']}?patient_id={p['id']}")
+                st.toast("Call Triggered")
+            
+            if st.button(f"🗑️ Discharge", key=f"del_{p['id']}"):
+                requests.delete(f"{BACKEND}/patients/{p['id']}")
+                st.rerun()
 
-st.divider()
-st.caption("AI-Powered Post-Discharge Monitoring System | Clinical Standard 2025")
+        with col_history:
+            st.markdown("### 30-Day Check-in History")
+            log_res = requests.get(f"{BACKEND}/patients/{p['id']}/all-logs")
+            
+            if log_res.status_code == 200:
+                logs = log_res.json()
+                for log in reversed(logs):
+                    score = log.get("risk_score", 0)
+                    
+                    st.markdown("<div class='day-card'>", unsafe_allow_html=True)
+                    c1, c2, c3 = st.columns([1, 1, 2])
+                    
+                    c1.metric("Risk Score", f"{score}%")
+                    
+                    # Risk Level Badge
+                    if score > 60: c2.markdown("<span class='risk-high'>🚨 HIGH</span>", unsafe_allow_html=True)
+                    elif score > 30: c2.markdown("<span class='risk-med'>⚠️ MED</span>", unsafe_allow_html=True)
+                    else: c2.markdown("<span class='risk-low'>✅ STABLE</span>", unsafe_allow_html=True)
+
+                    if c3.button("Analyze Risk Drivers", key=f"analyze_{log['id']}"):
+                        st.write("---")
+                        
+                        # 1. SHAP GRAPH (RED BARS ONLY)
+                        shap_data = log.get("shap", {})
+                        # Filter out non-positive values (Removes -0.1 and 0.0)
+                        active_drivers = {k: v for k, v in shap_data.items() if v > 0}
+                        
+                        if active_drivers:
+                            st.write("#### 🧠 Clinical Risk Drivers")
+                            
+                            # Professional Matplotlib Chart
+                            fig, ax = plt.subplots(figsize=(6, len(active_drivers)*0.5))
+                            # Sort by weight
+                            sorted_drivers = dict(sorted(active_drivers.items(), key=lambda x: x[1]))
+                            ax.barh(list(sorted_drivers.keys()), list(sorted_drivers.values()), color='#ff4b4b')
+                            ax.set_title("Impact Weight per Symptom")
+                            st.pyplot(fig)
+
+                            # 2. PERFECT EXPLAINABILITY TEXT (WHAT & SOURCE)
+                            st.write("#### 📋 Medical Justification")
+                            for symptom, weight in active_drivers.items():
+                                ref = CLINICAL_REF.get(symptom, {"name": symptom, "src": "Clinical Protocol"})
+                                st.markdown(f"""
+                                <div class='explanation-box'>
+                                    <strong>{ref['name']}</strong> (+{weight})<br>
+                                    <small>Source: {ref['src']}</small>
+                                </div>
+                                """, unsafe_allow_html=True)
+                        else:
+                            st.success("No active risk drivers detected for this log.")
+                    
+                    st.markdown("</div>", unsafe_allow_html=True)
