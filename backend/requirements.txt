@@ -9,3 +9,5 @@ apscheduler
 python-multipart
 pydantic
 pydantic-settings
+pandas
+numpy
