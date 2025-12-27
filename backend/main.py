@@ -49,6 +49,11 @@ def get_db():
 
 # --- DASHBOARD & PATIENT ENDPOINTS ---
 
+# Temporary: Add this to main.py
+models.Base.metadata.drop_all(bind=engine) # This deletes old tables
+models.Base.metadata.create_all(bind=engine) # This creates new ones
+
+
 @app.post("/patients", response_model=schemas.PatientOut)
 def enroll_patient(patient: schemas.PatientCreate, db: Session = Depends(get_db)):
     return crud.create_patient(db, patient.dict())
