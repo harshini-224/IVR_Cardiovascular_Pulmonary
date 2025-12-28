@@ -38,14 +38,20 @@ def calculate_risk_and_shap(disease_track, symptoms_dict):
     shap_explanations = {}
 
     # Define which features belong to which track
-    cardio_features = ["chest_discomfort", "dizziness", "shortness_of_breath", 
-                       "weight_gain", "leg_swelling", "palpitations", "fatigue"]
+   # Ensure these EXACTLY match the 'field' names in main.py FRIENDLY_QUESTIONS
+    cardio_features = [
+        "shortness_of_breath", "leg_swelling", 
+        "chest_discomfort", "weight_gain", "fatigue", "dizziness"
+    ]
     
-    pulmonary_features = ["rest_dyspnea", "chest_tightness", "exertional_dyspnea", 
-                          "wheezing", "phlegm_change", "cough_increase"]
+    pulmonary_features = [
+        "exertional_dyspnea", "cough_increase", 
+        "wheezing", "rest_dyspnea", "phlegm_change"
+    ]
     
-    general_features = ["confusion", "fever_chills", "condition_worsened", 
-                        "nausea_vomiting", "new_pain"]
+    general_features = [
+        "fever_chills", "confusion", "condition_worsened"
+    ]
 
     # 1. Determine relevant features for this specific patient
     if disease_track == "Cardiovascular":
