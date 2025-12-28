@@ -16,20 +16,28 @@ app = FastAPI(title="Patient Monitoring IVR System")
 # --- SIMPLIFIED FRIENDLY QUESTIONS ---
 FRIENDLY_QUESTIONS = {
     "Cardiovascular": [
-        {"field": "shortness_of_breath", "text": "Since you got home, has it been harder for you to breathe?"},
-        {"field": "leg_swelling", "text": "Are your legs or feet puffier or more swollen than usual?"},
-        {"field": "chest_discomfort", "text": "Have you felt any new pain or a heavy feeling in your chest?"},
-        {"field": "weight_gain", "text": "Have you gained weight suddenly in the last few days?"},
+        {"field": "chest_discomfort", "text": "Have you felt any new pain, pressure, or a heavy feeling in your chest today?"},
+        {"field": "dizziness", "text": "Have you felt lightheaded, dizzy, or like you might faint?"},
+        {"field": "shortness_of_breath", "text": "Are you finding it harder than usual to catch your breath while resting?"},
+        {"field": "weight_gain", "text": "Have you noticed a sudden gain in weight, like two or more pounds since yesterday?"},
+        {"field": "leg_swelling", "text": "Are your legs, ankles, or feet more swollen than they were yesterday?"},
+        {"field": "palpitations", "text": "Has your heart felt like it is racing, fluttering, or skipping beats?"},
     ],
     "Pulmonary": [
-        {"field": "exertional_dyspnea", "text": "Is it harder to breathe when you walk or do simple chores?"},
-        {"field": "cough_increase", "text": "Have you been coughing more often since you got home?"},
-        {"field": "wheezing", "text": "Do you hear a whistling sound when you breathe?"},
-        {"field": "rest_dyspnea", "text": "Is it hard to breathe even when you are just sitting still?"},
+        {"field": "rest_dyspnea", "text": "Is it difficult to breathe even when you are sitting still or lying down?"},
+        {"field": "chest_tightness", "text": "Does your chest feel tight, as if something is squeezing your lungs?"},
+        {"field": "exertional_dyspnea", "text": "Is it harder to breathe than usual when you walk or move around the house?"},
+        {"field": "wheezing", "text": "Have you noticed a whistling or wheezing sound when you breathe in or out?"},
+        {"field": "cough_increase", "text": "Have you been coughing more frequently or more deeply today?"},
+        {"field": "phlegm_change", "text": "Have you noticed any change in the color or amount of mucus you are coughing up?"},
     ],
     "General": [
-        {"field": "fever_chills", "text": "Have you had a fever or felt very cold and shaky?"},
-        {"field": "confusion", "text": "Have you felt mixed up or had trouble remembering things?"}
+        {"field": "confusion", "text": "Have you felt unusually confused, foggy, or had trouble focusing today?"},
+        {"field": "fever_chills", "text": "Have you had a fever, or have you felt very cold and shaky with chills?"},
+        {"field": "condition_worsened", "text": "Overall, do you feel like your health has gotten worse since our last check-in?"},
+        {"field": "nausea_vomiting", "text": "Have you felt sick to your stomach or had any vomiting today?"},
+        {"field": "new_pain", "text": "Are you experiencing any new or unusual pain in other parts of your body?"},
+        {"field": "fatigue", "text": "Have you felt much more tired or exhausted than usual today?"},
     ]
 }
 
@@ -91,13 +99,14 @@ def manual_call(phone: str, patient_id: int, db: Session = Depends(get_db)):
 def ivr_start(patient_id: int = Query(...), db: Session = Depends(get_db)):
     patient = crud.get_patient_by_id(db, patient_id)
     if not patient:
-        return Response(content='<Response><Say>Patient not found.</Say></Response>', media_type="application/xml")
+        return Response(content='<Response><Say>Hello. We could not find your records. Please contact your clinic.</Say></Response>', media_type="application/xml")
     
-    # Pass 'disease_track' instead of 'disease' to match updated models
     twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
     <Response>
-        <Say>Hello {patient.name}. This is your automated health check-in.</Say>
-        <Say>For Yes, press 1. For No, press 2.</Say>
+        <Say voice="Polly.Amy">Hello {patient.name}. This is the automated health support team checking in on your recovery.</Say>
+        <Pause length="1"/>
+        <Say voice="Polly.Amy">We have a few quick questions to see how you are feeling today. It will only take a minute.</Say>
+        <Say voice="Polly.Amy">During this call, please press 1 for Yes, and 2 for No.</Say>
         <Redirect method="POST">/twilio/ask?pid={patient_id}&amp;idx=0&amp;dis={patient.disease_track}</Redirect>
     </Response>
     """
@@ -105,7 +114,7 @@ def ivr_start(patient_id: int = Query(...), db: Session = Depends(get_db)):
 
 @app.post("/twilio/ask")
 def ivr_ask(pid: int = Query(...), idx: int = Query(...), dis: str = Query(...)):
-    survey = FRIENDLY_QUESTIONS.get(dis, []) + FRIENDLY_QUESTIONS.get("General", [])
+    survey = FRIENDLY_QUESTIONS.get(dis, []))
     
     if idx >= len(survey):
         return Response(content='<?xml version="1.0" encoding="UTF-8"?><Response><Say>Thank you. Your responses have been recorded. Goodbye.</Say><Hangup/></Response>', media_type="application/xml")
@@ -125,7 +134,7 @@ def ivr_ask(pid: int = Query(...), idx: int = Query(...), dis: str = Query(...))
 def ivr_handle(pid: int = Query(...), idx: int = Query(...), dis: str = Query(...), 
                Digits: str = Form(None), db: Session = Depends(get_db)):
     
-    survey = FRIENDLY_QUESTIONS.get(dis, []) + FRIENDLY_QUESTIONS.get("General", [])
+    survey = FRIENDLY_QUESTIONS.get(dis, []))
     
     if not Digits or Digits not in ["1", "2"]:
         return ivr_ask(pid, idx, dis)
@@ -134,13 +143,24 @@ def ivr_handle(pid: int = Query(...), idx: int = Query(...), dis: str = Query(..
     try:
         crud.update_ivr_answer(db, pid, survey[idx]["field"], answer)
 
+        # CHECK: Is this the last question?
         if idx == len(survey) - 1:
             log = crud.get_latest_log(db, pid)
             if log and log.symptoms:
-                # Engine now requires 'dis' (disease_track) for clinical weighting
+                # Calculate the clinical risk score and SHAP explanations
                 risk_score, shap_data = calculate_risk_and_shap(dis, log.symptoms)
                 crud.finalize_risk_score(db, pid, risk_score, shap_data)
+            
+            # Ending the call warmly
+            twiml = """<?xml version="1.0" encoding="UTF-8"?>
+            <Response>
+                <Say voice="Polly.Amy">Thank you so much for your time. Your updates have been shared with your clinical team.</Say>
+                <Say voice="Polly.Amy">We are here for you. Have a wonderful and restful day. Goodbye.</Say>
+                <Hangup/>
+            </Response>"""
+            return Response(content=twiml, media_type="application/xml")
         
+        # If not the last question, ask the next one
         return ivr_ask(pid, idx + 1, dis)
         
     except Exception as e:
