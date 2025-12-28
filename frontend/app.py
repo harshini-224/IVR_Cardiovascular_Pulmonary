@@ -47,7 +47,7 @@ with st.sidebar:
         name = st.text_input("Full Name")
         phone = st.text_input("Phone Number")
         # Updated to match disease_track in backend
-        track = st.selectbox("Disease Track", ["Cardiovascular", "Pulmonary"])
+        track = st.selectbox("Disease Track", ["Cardiovascular", "Pulmonary","General"])
         
         if st.form_submit_button("Enroll Patient"):
             payload = {"name": name, "phone_number": phone, "disease_track": track}
