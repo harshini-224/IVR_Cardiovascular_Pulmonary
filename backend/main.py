@@ -8,7 +8,7 @@ from twilio_calls import call_patient
 from ml_engine import calculate_risk_and_shap
 
 # Initialize database tables
-#models.Base.metadata.drop_all(bind=engine) 
+models.Base.metadata.drop_all(bind=engine) 
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Patient Monitoring IVR System")
