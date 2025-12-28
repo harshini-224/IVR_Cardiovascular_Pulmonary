@@ -114,7 +114,7 @@ def ivr_start(patient_id: int = Query(...), db: Session = Depends(get_db)):
 
 @app.post("/twilio/ask")
 def ivr_ask(pid: int = Query(...), idx: int = Query(...), dis: str = Query(...)):
-    survey = FRIENDLY_QUESTIONS.get(dis, []))
+    survey = FRIENDLY_QUESTIONS.get(dis, [])
     
     if idx >= len(survey):
         return Response(content='<?xml version="1.0" encoding="UTF-8"?><Response><Say>Thank you. Your responses have been recorded. Goodbye.</Say><Hangup/></Response>', media_type="application/xml")
@@ -134,7 +134,7 @@ def ivr_ask(pid: int = Query(...), idx: int = Query(...), dis: str = Query(...))
 def ivr_handle(pid: int = Query(...), idx: int = Query(...), dis: str = Query(...), 
                Digits: str = Form(None), db: Session = Depends(get_db)):
     
-    survey = FRIENDLY_QUESTIONS.get(dis, []))
+    survey = FRIENDLY_QUESTIONS.get(dis, [])
     
     if not Digits or Digits not in ["1", "2"]:
         return ivr_ask(pid, idx, dis)
