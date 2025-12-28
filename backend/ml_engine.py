@@ -31,37 +31,37 @@ CLINICAL_WEIGHTS = {
 def calculate_risk_and_shap(disease_track, symptoms_dict):
     """
     Calculates track-specific risk and SHAP values.
-    - Removes -0.1 (No negative values).
-    - Filters features based on the patient's medical track.
+    Each track is now strictly independent.
     """
     total_score = 0
     shap_explanations = {}
 
-    # Define which features belong to which track
-   # Ensure these EXACTLY match the 'field' names in main.py FRIENDLY_QUESTIONS
+    # Define strictly separate features
     cardio_features = [
-        "shortness_of_breath", "leg_swelling", 
-        "chest_discomfort", "weight_gain", "fatigue", "dizziness"
+        "chest_discomfort", "dizziness", "shortness_of_breath", 
+        "weight_gain", "leg_swelling", "palpitations"
     ]
     
     pulmonary_features = [
-        "exertional_dyspnea", "cough_increase", 
-        "wheezing", "rest_dyspnea", "phlegm_change"
+        "rest_dyspnea", "chest_tightness", "exertional_dyspnea", 
+        "wheezing", "phlegm_change", "cough_increase"
     ]
     
     general_features = [
-        "fever_chills", "confusion", "condition_worsened"
+        "confusion", "fever_chills", "condition_worsened", 
+        "nausea_vomiting", "new_pain", "fatigue"
     ]
 
-    # 1. Determine relevant features for this specific patient
+    # 1. Strictly assign relevant keys—no combinations
     if disease_track == "Cardiovascular":
-        relevant_keys = cardio_features + general_features
+        relevant_keys = cardio_features
     elif disease_track == "Pulmonary":
-        relevant_keys = pulmonary_features + general_features
+        relevant_keys = pulmonary_features
     else:
+        # This handles the "General" track specifically
         relevant_keys = general_features
 
-    # 2. Calculate impact ONLY for relevant features
+    # 2. Calculate score based ONLY on relevant keys
     for field in relevant_keys:
         weight = CLINICAL_WEIGHTS.get(field, 0.0)
         answer = symptoms_dict.get(field)
@@ -70,11 +70,10 @@ def calculate_risk_and_shap(disease_track, symptoms_dict):
             total_score += weight
             shap_explanations[field] = weight
         else:
-            # We set to 0.0 so it doesn't appear in the SHAP graph
-            # This removes the -0.1 requirement
             shap_explanations[field] = 0.0
 
-    # 3. Scale: Total score / 2.5 (Clinical Threshold)
+    # 3. Scaling: Keep the 2.5 threshold
     risk_percentage = min(max((total_score / 2.5) * 100, 0), 100)
 
     return round(risk_percentage, 2), shap_explanations
+
