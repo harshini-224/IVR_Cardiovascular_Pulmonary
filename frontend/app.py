@@ -22,18 +22,40 @@ CLINICAL_REF = {
 }
 
 # --- CUSTOM UI STYLING ---
+# --- CUSTOM UI STYLING ---
 st.markdown("""
     <style>
     .risk-high { color: #ff4b4b; font-size: 18px; font-weight: bold; }
     .risk-med { color: #ffa500; font-size: 18px; font-weight: bold; }
     .risk-low { color: #008000; font-size: 18px; font-weight: bold; }
+    
     .day-card { 
         border: 1px solid #e6e9ef; padding: 20px; border-radius: 10px; 
         background-color: #f9f9f9; margin-bottom: 15px;
     }
+    
+    /* Updated for Black Text and better contrast */
     .explanation-box {
-        background-color: #fff3f3; border-left: 5px solid #ff4b4b;
-        padding: 10px; margin-top: 10px; border-radius: 5px;
+        background-color: #fdfdfd; 
+        border-left: 5px solid #ff4b4b;
+        border-top: 1px solid #eee;
+        border-right: 1px solid #eee;
+        border-bottom: 1px solid #eee;
+        padding: 15px; 
+        margin-top: 10px; 
+        border-radius: 5px;
+        color: #000000; /* Set font color to black */
+    }
+    
+    .explanation-box strong {
+        color: #000000; /* Ensure bold headers are black */
+        font-size: 1.1rem;
+    }
+    
+    .explanation-box small {
+        color: #333333; /* Dark gray for source text */
+        display: block;
+        margin-top: 5px;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -120,11 +142,16 @@ for p in patients:
 
                             # 2. PERFECT EXPLAINABILITY TEXT (WHAT & SOURCE)
                             st.write("#### 📋 Medical Justification")
+                            # Inside the "Analyze Risk Drivers" button logic
                             for symptom, weight in active_drivers.items():
-                                ref = CLINICAL_REF.get(symptom, {"name": symptom, "src": "Clinical Protocol"})
+                                ref = CLINICAL_REF.get(symptom, {"name": symptom.replace("_", " ").title(), "src": "Standard Clinical Protocol"})
+    
                                 st.markdown(f"""
                                 <div class='explanation-box'>
-                                    <strong>{ref['name']}</strong> (+{weight})<br>
+                                    <strong>{ref['name']}</strong> (+{weight} impact weight)
+                                    <p style="color: black; margin-top: 5px;">
+                                        This symptom was identified as a driver for the current risk score based on the patient's response.
+                                    </p>
                                     <small>Source: {ref['src']}</small>
                                 </div>
                                 """, unsafe_allow_html=True)
