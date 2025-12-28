@@ -18,7 +18,7 @@ class Patient(Base):
     override_notes = Column(String, nullable=True) # This is where your Assessment saves
 
     # Relationship to allow multiple logs (Day 1, Day 2, etc.)
-    ivr_logs = relationship("IVRLog", back_populates="patient", cascade="all, delete-orphan")
+    ivr_logs = relationship("IVRLog", back_populates="owner", cascade="all, delete-orphan")
 
 class IVRLog(Base):
     __tablename__ = "ivr_logs"
@@ -34,3 +34,4 @@ class IVRLog(Base):
     reviewed_at = Column(DateTime, nullable=True)
     
     created_at = Column(DateTime, default=datetime.utcnow)
+    owner = relationship("Patient" , back_populates="logs")
