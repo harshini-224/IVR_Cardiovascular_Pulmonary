@@ -140,18 +140,25 @@ def ivr_handle(pid: int = Query(...), idx: int = Query(...), dis: str = Query(..
         return ivr_ask(pid, idx, dis)
 
     answer = "Yes" if Digits == "1" else "No"
+    
     try:
-        crud.update_ivr_answer(db, pid, survey[idx]["field"], answer)
+        # 1. Update the database with the current answer
+        log = crud.update_ivr_answer(db, pid, survey[idx]["field"], answer)
 
-        # CHECK: Is this the last question?
+        # 2. CHECK: Is this the last question?
         if idx == len(survey) - 1:
-            log = crud.get_latest_log(db, pid)
+            # IMPORTANT FIX: Use the 'log' returned directly from update_ivr_answer
+            # This ensures we have the symptoms without waiting for a fresh DB query
             if log and log.symptoms:
-                # Calculate the clinical risk score and SHAP explanations
-                risk_score, shap_data = calculate_risk_and_shap(dis, log.symptoms)
+                # We manually ensure the last answer is included in the dictionary
+                current_symptoms = dict(log.symptoms)
+                current_symptoms[survey[idx]["field"]] = answer 
+                
+                # Calculate risk using the most up-to-date symptoms
+                risk_score, shap_data = calculate_risk_and_shap(dis, current_symptoms)
                 crud.finalize_risk_score(db, pid, risk_score, shap_data)
             
-            # Ending the call warmly
+            # 3. THE ENDING RESPONSE
             twiml = """<?xml version="1.0" encoding="UTF-8"?>
             <Response>
                 <Say voice="Polly.Amy">Thank you so much for your time. Your updates have been shared with your clinical team.</Say>
@@ -160,7 +167,7 @@ def ivr_handle(pid: int = Query(...), idx: int = Query(...), dis: str = Query(..
             </Response>"""
             return Response(content=twiml, media_type="application/xml")
         
-        # If not the last question, ask the next one
+        # If not the last question, move to next
         return ivr_ask(pid, idx + 1, dis)
         
     except Exception as e:
